@@ -25,7 +25,7 @@ impl<T> RefCell<T> {
     /// The borrow lasts until the returned `Ref` exits scope. Multiple
     /// immutable borrows can be taken out at the same time.
     /// panic if already mutably borrowed
-    pub fn borrow(&self) -> &T {
+    pub fn borrow(&self) -> Option<&T> {
         /*
          * TODO
          */
@@ -38,7 +38,7 @@ impl<T> RefCell<T> {
     /// The borrow lasts until the returned `RefMut` or all `RefMut`s derived
     /// from it exit scope. The value cannot be borrowed while this borrow is
     /// active.
-    pub fn borrow_mut(&self) -> &mut T {
+    pub fn borrow_mut(&self) -> Option<&mut T> {
         /*
          * TODO
          */
@@ -91,6 +91,19 @@ mod tests {
 
     #[cfg(feature = "skip")]
     #[test]
+    fn borrow_mut_after_all_borrows_expires() {
+        let rc = RefCell::new(42);
+        {
+            let rc_ref1 = rc.borrow();
+            let rc_ref2 = rc.borrow();
+        }
+        let ref_mut = rc.borrow_mut();
+
+        assert_eq!(rc.state.get(), BorrowState::Exclusive);
+    }
+
+    #[cfg(feature = "skip")]
+    #[test]
     fn borrow_mut() {
         let c = RefCell::new("hello".to_owned());
 
@@ -99,7 +112,6 @@ mod tests {
         assert_eq!(&*c.borrow(), "bonjour");
     }
 
-    #[cfg(feature = "skip")]
     #[test]
     fn refcell_demo() {
         use std::cell::{RefCell, RefMut};
@@ -197,7 +209,12 @@ mod refcell_usecase {
 
             limit_tracker.set_value(80);
 
-            assert_eq!(mock_messenger.sent_messages.len(), 1);
+            let ref_messages = mock_messenger.sent_messages;
+            assert_eq!(ref_messages.len(), 1);
+            assert_eq!(
+                ref_messages[0],
+                "Warning: You've used up over 75% of your quota!"
+            );
         }
     }
 
@@ -231,7 +248,12 @@ mod refcell_usecase {
 
             limit_tracker.set_value(80);
 
-            assert_eq!(mock_messenger.sent_messages.borrow().len(), 1);
+            let ref_messages = mock_messenger.sent_messages.borrow();
+            assert_eq!(ref_messages.len(), 1);
+            assert_eq!(
+                ref_messages[0],
+                "Warning: You've used up over 75% of your quota!"
+            );
         }
     }
 }

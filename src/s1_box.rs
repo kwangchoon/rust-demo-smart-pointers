@@ -17,9 +17,10 @@ fn box_pointer() {
         y: i32,
     }
 
+    //  b (stack) [  ---]-------> Point { x: 5, y: 10 } (heap)
     let b: Box<Point> = Box::new(Point { x: 5, y: 10 });
 
-    println!("b (stack) = {:p}", std::ptr::addr_of!(b)); // {:p} &b
+    println!("b (stack) = {:p}", std::ptr::addr_of!(b));
     println!("b (stack) = {:p}", &b);
     println!("b (heap)= {:p}", b);
     println!("b = {:?}", b);
@@ -68,7 +69,7 @@ fn moving_with_box() {
     let data = Box::new([42; 1024 * 10]);
 
     println!("data@ (stack) = {:p}", std::ptr::addr_of!(data));
-    println!("data@ (heap) = {:p}", &*data); // data
+    println!("data@ (heap) = {:p}", &*data);
 
     let handle = thread::spawn(move || {
         println!("data@ (stack) = {:p}", std::ptr::addr_of!(data));
@@ -107,54 +108,88 @@ use List::{Cons, Nil};
 
 #[test]
 fn cons_list() {
-    //
     //  |            |
-    //  | Cons(1, b) |----> Cons(2, b)---> Cons(3, b) ----> Nil
+    //  | Cons(1, *) |----> | Cons(2, *) | ---> | Cons(3, *) | ----> | Nil |
     //  |            |
     let list: List = Cons(1, Box::new(Cons(2, Box::new(Cons(3, Box::new(Nil))))));
 
     println!("list = {:?}", list);
 }
 
-/**/
+#[test]
+fn owning_trait_object() {
+    fn random_animal(random_number: f64) -> Box<dyn Animal> {
+        if random_number < 0.5 {
+            Box::new(Dog {})
+        } else {
+            Box::new(Cat {})
+        }
+    }
+
+    trait Animal {
+        fn sound(&self) -> &'static str;
+    }
+
+    struct Dog;
+    struct Cat;
+
+    impl Animal for Dog {
+        fn sound(&self) -> &'static str {
+            "woof"
+        }
+    }
+
+    impl Animal for Cat {
+        fn sound(&self) -> &'static str {
+            "meow"
+        }
+    }
+
+    let animal: Box<dyn Animal> = random_animal(0.4);
+    println!("{}", animal.sound());
+}
 
 #[test]
-fn deref() {
+fn what_if_box_is_not_smart_pointer() {
+    let b = Box::new(String::from("Hello"));
+    let inner: String = *b; // Box<String> => String
+
+    let b = Box::new(String::from("Hello"));
+    let inner_inner: &str = &**b; // Box<String> => String => &str
+}
+
+#[test]
+fn what_is_going_on_here() {
     use std::ops::Deref;
 
     let b = Box::new(String::from("Hello"));
 
-    let inner: &String = b.deref(); // &Box<String> => &String
-    assert_eq!(*inner, String::from("Hello"));
-    assert_eq!(*inner, "Hello"); // What's going on here?
-
-    assert_eq!(*b, *b.deref()); // *b = *b.deref()
+    let inner: &String = &*b; // &Box<String> => &String
+    let inner: &str = &*b; // &Box<String> => &str ???
 }
 
 #[test]
-fn deref_magic() {
+fn auto_deref() {
     use std::ops::Deref;
 
     let b = Box::new(String::from("Hello"));
 
-    let inner: &String = b.deref(); // &Box<String> => &String??? What's going on here?
-    let inner: &str = b.deref().deref();
-    let inner: &str = b.deref(); // deref coercion
+    let inner: &String = &*b; // &Box<String> => &String: using auto-deref
+    let inner: &String = &*(b.deref()); // &Box<String> => &String
+
+    let inner: &String = &b; // &Box<String> => &String: using auto-deref
+    let inner: &String = b.deref(); // &Box<String> => &String: using auto-deref
+
+    let inner_inner: &str = &**b; // &Box<String> => &String => &str
+    let inner_inner: &str = &*(*b.deref());
+    let inner_inner: &str = &*((*b.deref()).deref());
+
+    let inner_inner: &str = &b; // &Box<String> => &String => &str: using auto-deref twice
+    let inner_inner: &str = b.deref().deref(); // &Box<String> => &String => &str: using auto-deref twice
+
+    // If the result of `deref()` is a reference, `deref()` will be called again
+    // as many times as necessary until a value of type T is obtained => "deref coercion".
 }
-
-#[test]
-fn auto_deref_magic() {
-    use std::ops::Deref;
-
-    let b = Box::new(String::from("Hello"));
-
-    let inner: &String = &*b;
-    let inner: &String = &b;
-
-    let inner: &str = &*b;
-    let inner: &str = &b;
-}
-
 /**
  * Implicit "Deref Coercions" with Functions and Methods:
  *
@@ -195,8 +230,11 @@ fn into_raw() {
     // do something with ptr
     unsafe {
         ptr.replace(String::from("World"));
+
         let s = ptr.read();
         println!("s = {s:?}");
+
+        ptr.write(String::from("Rustonean!"));
     }
 
     println!("ptr = {:?}", unsafe { &*ptr });
@@ -220,25 +258,6 @@ fn implicit_coercion_from_ref_to_ptr() {
 }
 
 #[test]
-fn raw_ptr_test() {
-    #[derive(Debug)]
-    struct Coord {
-        x: i32,
-        y: i32,
-    }
-
-    let b = Box::new(Coord { x: 1, y: 2 });
-    let mut_ptr: *mut Coord = Box::into_raw(b); // b moved
-
-    unsafe {
-        let c: Coord = std::ptr::read(mut_ptr);
-        println!("c = {c:?}");
-        let c = std::ptr::read(&mut_ptr);
-        println!("c = {:?}", *c);
-    }
-}
-
-#[test]
 fn test_from_raw() {
     let mut b = Box::new(String::from("Hello"));
     let p: *mut String = Box::into_raw(b); // b moved
@@ -249,20 +268,6 @@ fn test_from_raw() {
 
         println!("b = {b:?}");
     }
-}
-
-#[test]
-fn test_leak() {
-    let x = Box::new(41);
-
-    let static_ref: &mut i32 = Box::leak(x);
-    *static_ref += 1;
-    assert_eq!(*static_ref, 42);
-
-    let x: Box<[i32]> = vec![1, 2, 3].into_boxed_slice();
-    let static_ref: &mut [i32] = Box::leak(x);
-    static_ref[0] = 4;
-    assert_eq!(*static_ref, [4, 2, 3]);
 }
 
 /**
@@ -312,13 +317,9 @@ fn drop_order2() {
  * Dropping a Value Early with `std::mem::drop`
  *
  * Unfortunately, it’s not straightforward to disable the automatic drop functionality.
- * Rust doesn’t let you call the `Drop` trait’s `drop` method manually; instead you
- * have to call the `std::mem::drop` function provided by the standard library if you
+ * Rust doesn’t let you call the `Drop` trait’s `drop` method manually (to prevent double-free);
+ * instead you have to call the `std::mem::drop` function provided by the standard library if you
  * want to force a value to be dropped before the end of its scope.
- *
- * Rust doesn’t let us call `drop` explicitly because Rust would still automatically call
- * `drop` on the value at the end of main. This would cause a "double free error" because
- * Rust would be trying to clean up the same value twice.
  */
 
 #[test]

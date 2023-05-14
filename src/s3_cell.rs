@@ -28,7 +28,7 @@ impl<T> Cell<T> {
         todo!()
     }
 
-    /// Replaces the contained value with val, and returns the old contained value.
+    /// Replaces the contained value with value, and returns the old contained value.
     /// Hint: use mem::replace
     pub fn replace(&self, value: T) -> T {
         // SAFETY: This can cause data races if called from a separate thread,

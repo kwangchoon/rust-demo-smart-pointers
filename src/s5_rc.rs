@@ -109,14 +109,14 @@ mod std_rc_demo {
 
     impl Drop for Node {
         fn drop(&mut self) {
-            println!("Dropping");
+            println!("Dropping {}", self.value);
         }
     }
 
     /**
      * Weak is used for break refernce cycle. A use case for Weak: a tree could use Rc
-     * from parent to children, and Weak pointer from children to their parents. By
-     * calling upgrade on the Weak pointer, which returns an Option<Rc<T>>.
+     * from parent to children, and Weak pointer from children to their parents. 
+     * Calling `upgrade` on the Weak pointer returns an Option<Rc<T>>.
      *
      * Rc vs Weak
      * Rc strong reference counting. Reference cycle could cause the memory never be deallocated.
@@ -175,12 +175,9 @@ mod std_rc_demo {
         // ^           |
         // +-----------+
         let a = Rc::new(RefCell::new(Node { next: None }));
-        println!("a count: {:?}", Rc::strong_count(&a));
         let b = Rc::new(RefCell::new(Node {
             next: Some(Rc::clone(&a)),
         }));
-        println!("a count: {:?}", Rc::strong_count(&a));
-        println!("b count: {:?}", Rc::strong_count(&b));
         let c = Rc::new(RefCell::new(Node {
             next: Some(Rc::clone(&b)),
         }));
@@ -191,7 +188,7 @@ mod std_rc_demo {
         println!("b count: {:?}", Rc::strong_count(&b));
         println!("c count: {:?}", Rc::strong_count(&c));
 
-        // // Print a will casue stack overlfow
-        // println!("a {:?}", &a);
+        // Print a will casue stack overlfow
+        println!("c {:?}", &c);
     }
 }

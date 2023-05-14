@@ -9,9 +9,9 @@
 use std::fmt::Debug;
 
 #[derive(Debug)]
-struct MyBox<T>(T);
+struct MyBox<T: Debug>(T);
 
-impl<T> MyBox<T> {
+impl<T: Debug> MyBox<T> {
     fn new(x: T) -> MyBox<T> {
         MyBox(x)
     }
@@ -32,10 +32,12 @@ fn my_box_creation() {
  * can be treated like a regular reference, you can write code that
  * operates on references and use that code with smart pointers too.
  */
+
+use std::ops::Deref;
+
 /*
  * TODO: define `Deref` for `MyBox`
  */
-use std::ops::Deref;
 
 #[cfg(feature = "skip")]
 #[test]
@@ -60,7 +62,7 @@ fn create_smart_pointer() {
 
     let m = MyBox::new(String::from("Rust"));
     hello(&(*m.0)[..]); // in case we don't have the Deref coercion
-    hello(&m);
+                        // hello(&m);
 }
 
 #[cfg(feature = "skip")]
@@ -80,8 +82,7 @@ fn test_cascading_auto_deref_custom_smart_pointer() {
         println!("value = {}", *value);
     }
 
-    let x = 42;
-    let y = MyBox::new(MyBox::new(x));
+    let y = MyBox::new(MyBox::new(42));
 
     // method call
     foo(&y);
@@ -118,7 +119,7 @@ fn cascading_drops_for_smart_pointer() {
  * TODO: define `AsRef` for `MyBox`
  */
 
-// #[cfg(feature = "skip")]
+#[cfg(feature = "skip")]
 #[test]
 fn as_ref_for_custom_smart_pointer() {
     let mbox = MyBox::new(String::from("Rust"));
@@ -127,14 +128,14 @@ fn as_ref_for_custom_smart_pointer() {
     println!("{}", ref_t);
 }
 
-// #[cfg(feature = "skip")]
+#[cfg(feature = "skip")]
 #[test]
 fn as_ref_for_cascading_custom_smart_pointer() {
     let mbox = MyBox::new(MyBox::new(String::from("Rust")));
 
-    // let into_ref = MyBox::as_ref(&mbox);
-    let into_ref: &str = mbox.as_ref();
-    println!("{}", into_ref);
+    let into_ref = MyBox::as_ref(&mbox);
+    // let into_ref: &str = mbox.as_ref();
+    println!("{:?}", into_ref);
 }
 
 /**
@@ -161,6 +162,7 @@ mod as_ref_demos {
         // take_string(String::from("Rust")); // No type coercion
     }
 
+    #[test]
     fn take_str_reference_and_string_reference_and_string1() {
         fn take_string(s: impl Into<String>) {
             let s = s.into();
@@ -169,7 +171,7 @@ mod as_ref_demos {
 
         take_string(&String::from("Rust"));
         take_string("Rust");
-        take_string(String::from("Rust")); // No type coercion
+        take_string(String::from("Rust")); 
     }
 
     #[test]
@@ -258,7 +260,6 @@ mod as_ref_demos {
 
         let tons: &f32 = a_ton.as_ref();
         let unit: &str = a_ton.as_ref();
-        let unit = a_ton.as_ref() as &str;
 
         println!("a weight of {tons}{unit}");
 
@@ -285,11 +286,6 @@ mod as_ref_demos {
 ///
 /// Choose `AsRef` when you want to convert something to a reference directly, and
 /// you’re writing generic code.
-///
-/// `Borrow` appears earlier than `AsRef` before `Deref` was introduced. So `AsRef` relies
-/// on "deref coercion", while `Borrow` does not (See Vec<T> for example).
-///
-/// https://dev.to/zhanghandong/rust-concept-clarification-deref-vs-asref-vs-borrow-vs-cow-13g6
 ///
 mod borrow_demo {
     use std::{
