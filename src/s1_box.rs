@@ -120,27 +120,27 @@ fn cons_list() {
 fn owning_trait_object() {
     fn random_animal(random_number: f64) -> Box<dyn Animal> {
         if random_number < 0.5 {
-            Box::new(Dog {})
+            Box::new(Dog)
         } else {
-            Box::new(Cat {})
+            Box::new(Cat)
         }
     }
 
     trait Animal {
-        fn sound(&self) -> &'static str;
+        fn sound(&self) -> &str;
     }
 
     struct Dog;
     struct Cat;
 
     impl Animal for Dog {
-        fn sound(&self) -> &'static str {
+        fn sound(&self) -> &str {
             "woof"
         }
     }
 
     impl Animal for Cat {
-        fn sound(&self) -> &'static str {
+        fn sound(&self) -> &str {
             "meow"
         }
     }
@@ -155,7 +155,8 @@ fn what_if_box_is_not_smart_pointer() {
     let inner: String = *b; // Box<String> => String
 
     let b = Box::new(String::from("Hello"));
-    let inner_inner: &str = &**b; // Box<String> => String => &str
+    // let inner_inner: &str = &*&*b; // Box<String> => String => &str
+    let inner_inner: &str = &b; // Box<String> => String => &str
 }
 
 #[test]
@@ -164,8 +165,8 @@ fn what_is_going_on_here() {
 
     let b = Box::new(String::from("Hello"));
 
-    let inner: &String = &*b; // &Box<String> => &String
-    let inner: &str = &*b; // &Box<String> => &str ???
+    let inner: &String = &b; // &Box<String> => &String
+    let inner: &str = &b; // &Box<String> => &str ???
 }
 
 #[test]
@@ -173,6 +174,11 @@ fn auto_deref() {
     use std::ops::Deref;
 
     let b = Box::new(String::from("Hello"));
+
+    // *b => *b.deref()
+
+    // &A => &B    A(...(...(B(.. C(xxxx)..))))
+    // &A => &C
 
     let inner: &String = &*b; // &Box<String> => &String: using auto-deref
     let inner: &String = &*(b.deref()); // &Box<String> => &String
@@ -269,6 +275,28 @@ fn test_from_raw() {
         println!("b = {b:?}");
     }
 }
+
+// #[test]
+// fn quiz() {
+//     fn foo(s: &mut String) {
+//         let kk: &mut String = s; // copy or move?? --> reborrowing!
+//         println!("kk = {:?}", kk);
+
+//         s.push_str("world!");
+//         println!("s = {:?}", s);
+//     }
+
+//     fn bar(s: &String) {
+//         let kk = s; // copy or move?
+//         println!("kk = {:?}", kk);
+//         println!("s = {:?}", s);
+//     }
+
+//     let mut x = String::from("Hello");
+
+//     bar(&x); // 1. copy or borrow or move? & : Copy
+//     foo(&mut x); // 2.  copy or borrow or move? &mut: Copy??????? ===> 'reborrowing'
+// }
 
 /**
  * Running Code on Cleanup with the `Drop` Trait:

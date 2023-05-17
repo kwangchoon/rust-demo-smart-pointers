@@ -5,12 +5,14 @@ use std::ptr;
 
 #[derive(Debug)]
 pub struct Cell<T> {
-    _phantom: PhantomData<T>,
+    inner: UnsafeCell<T>,
 }
 
 impl<T> Cell<T> {
     pub fn new(value: T) -> Self {
-        todo!()
+        Cell {
+            inner: UnsafeCell::new(value),
+        }
     }
 
     /// Returns a copy of the contained value.
@@ -21,11 +23,7 @@ impl<T> Cell<T> {
     {
         // SAFETY: This can cause data races if called from a separate thread,
         // but `Cell` is `!Sync` so this won't happen.
-
-        /*
-         * TODO
-         */
-        todo!()
+        unsafe { *self.inner.get() }
     }
 
     /// Replaces the contained value with value, and returns the old contained value.
@@ -35,18 +33,13 @@ impl<T> Cell<T> {
         // but `Cell` is `!Sync` so this won't happen.
         // Hint: use mem::replace
 
-        /*
-         * TODO
-         */
-        todo!()
+        mem::replace(unsafe { &mut *self.inner.get() }, value)
     }
 
     /// Sets the contained value while dropping old value.
     /// Hint: use self::replace and drop
     pub fn set(&self, value: T) {
-        /*
-         * TODO
-         */
+        let _ = self.replace(value);
     }
 
     /// Takes the value of the cell, leaving Default::default() in its place.
@@ -55,10 +48,7 @@ impl<T> Cell<T> {
     where
         T: Default,
     {
-        /*
-         * TODO
-         */
-        todo!()
+        self.replace(Default::default())
     }
 
     /// Swaps the values of two Cells. Difference with std::mem::swap is that this
@@ -74,18 +64,15 @@ impl<T> Cell<T> {
         // pointers since `Cell` makes sure nothing else will be pointing into
         // either of these `Cell`s.
 
-        /*
-         * TODO
-         */
+        unsafe {
+            ptr::swap(self.inner.get(), other.inner.get());
+        }
     }
 
     /// Unwraps the value.
     /// Hint: use UnsafeCell::into_inner
     pub fn into_inner(self) -> T {
-        /*
-         * TODO
-         */
-        todo!()
+        self.inner.into_inner()
     }
 
     /* More ... */
@@ -95,20 +82,14 @@ impl<T> Cell<T> {
     /// Returns a raw pointer to the underlying data in this cell.
     /// Hint:: use UnsafeCell::get
     pub fn as_ptr(&self) -> *mut T {
-        /*
-         * TODO
-         */
-        todo!()
+        self.inner.get()
     }
 
     /// Returns a mutable reference to the underlying data.
     /// This call borrows Cell mutably (at compile-time) which guarantees that we possess the only reference.
     /// Hint: use UnsafeCell::get_mut
     pub fn get_mut(&mut self) -> &mut T {
-        /*
-         * TODO
-         */
-        todo!()
+        self.inner.get_mut()
     }
 }
 
@@ -222,5 +203,34 @@ mod tests {
         });
 
         t1.join().unwrap();
+    }
+}
+
+mod another {
+
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    #[test]
+    fn test() {
+        #[derive(Debug)]
+        enum List {
+            Cons(Cell<i32>, Rc<List>),
+            Nil,
+        }
+        use List::{Cons, Nil};
+
+        let mut a = Rc::new(Cons(
+            Cell::new(5),
+            Rc::new(Cons(Cell::new(10), Rc::new(Nil))),
+        ));
+        println!("a after = {a:?}");
+        match *a {
+            Cons(ref head, _) => {
+                head.replace(42);
+            }
+            Nil => {}
+        }
+        println!("a after = {:?}", a);
     }
 }

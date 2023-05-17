@@ -8,13 +8,22 @@ use std::{
 /// A mutable memory location with dynamically checked borrow rules
 #[derive(Debug)]
 pub struct RefCell<T> {
-    _phantom: PhantomData<T>,
+    inner: UnsafeCell<T>,
+    state: Cell<BorrowState>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum BorrowState {
+    Unused,
+    Shared(usize),
+    Exclusive,
 }
 
 impl<T> RefCell<T> {
     pub fn new(value: T) -> RefCell<T> {
         RefCell {
-            _phantom: PhantomData,
+            inner: UnsafeCell::new(value),
+            state: Cell::new(BorrowState::Unused),
         }
     }
 }
@@ -25,11 +34,18 @@ impl<T> RefCell<T> {
     /// The borrow lasts until the returned `Ref` exits scope. Multiple
     /// immutable borrows can be taken out at the same time.
     /// panic if already mutably borrowed
-    pub fn borrow(&self) -> Option<&T> {
-        /*
-         * TODO
-         */
-        todo!()
+    pub fn borrow(&self) -> Ref<'_, T> {
+        match self.state.get() {
+            BorrowState::Unused => {
+                self.state.set(BorrowState::Shared(1));
+                Ref { refcell: self }
+            }
+            BorrowState::Shared(count) => {
+                self.state.set(BorrowState::Shared(count + 1));
+                Ref { refcell: self }
+            }
+            BorrowState::Exclusive => panic!("already mutably borrowed"),
+        }
     }
 
     /// Mutably borrows the wrapped value.
@@ -38,11 +54,41 @@ impl<T> RefCell<T> {
     /// The borrow lasts until the returned `RefMut` or all `RefMut`s derived
     /// from it exit scope. The value cannot be borrowed while this borrow is
     /// active.
-    pub fn borrow_mut(&self) -> Option<&mut T> {
-        /*
-         * TODO
-         */
-        todo!()
+    pub fn borrow_mut(&self) -> RefMut<'_, T> {
+        match self.state.get() {
+            BorrowState::Shared(_) | BorrowState::Exclusive => panic!("already borrowed"),
+            BorrowState::Unused => {
+                self.state.set(BorrowState::Exclusive);
+                RefMut { refcell: self }
+            }
+        }
+    }
+}
+
+pub struct Ref<'refcell, T> {
+    refcell: &'refcell RefCell<T>,
+}
+
+impl<T> Drop for Ref<'_, T> {
+    fn drop(&mut self) {
+        match self.refcell.state.get() {
+            BorrowState::Shared(1) => self.refcell.state.set(BorrowState::Unused),
+            BorrowState::Shared(count) => self.refcell.state.set(BorrowState::Shared(count - 1)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+pub struct RefMut<'refcell, T> {
+    refcell: &'refcell RefCell<T>,
+}
+
+impl<T> Drop for RefMut<'_, T> {
+    fn drop(&mut self) {
+        match self.refcell.state.get() {
+            BorrowState::Exclusive => self.refcell.state.set(BorrowState::Unused),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -50,7 +96,7 @@ impl<T> RefCell<T> {
 mod tests {
     use super::*;
 
-    #[cfg(feature = "skip")]
+    // #[cfg(feature = "skip")]
     #[test]
     fn create_refcell() {
         let rf = RefCell::new(42);
@@ -60,7 +106,7 @@ mod tests {
         assert_eq!(rf.state.get(), BorrowState::Unused);
     }
 
-    #[cfg(feature = "skip")]
+    // #[cfg(feature = "skip")]
     #[test]
     fn borrow_many_times() {
         let rc = RefCell::new(42);
@@ -70,7 +116,7 @@ mod tests {
         assert_eq!(rc.state.get(), BorrowState::Shared(2));
     }
 
-    #[cfg(feature = "skip")]
+    // #[cfg(feature = "skip")]
     #[test]
     fn borrow_mut_once() {
         let rc = RefCell::new(42);
@@ -79,7 +125,7 @@ mod tests {
         assert_eq!(rc.state.get(), BorrowState::Exclusive);
     }
 
-    #[cfg(feature = "skip")]
+    // #[cfg(feature = "skip")]
     #[test]
     #[should_panic(expected = "already mutably borrowed")]
     fn borrow_panic() {
@@ -89,7 +135,7 @@ mod tests {
         let b = c.borrow(); // this causes a panic
     }
 
-    #[cfg(feature = "skip")]
+    // #[cfg(feature = "skip")]
     #[test]
     fn borrow_mut_after_all_borrows_expires() {
         let rc = RefCell::new(42);

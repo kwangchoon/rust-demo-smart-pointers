@@ -32,7 +32,6 @@ fn my_box_creation() {
  * can be treated like a regular reference, you can write code that
  * operates on references and use that code with smart pointers too.
  */
-
 use std::ops::Deref;
 
 /*
@@ -46,7 +45,7 @@ fn deref_for_custom_smart_pointer() {
     let y = MyBox::new(x);
 
     assert_eq!(5, x);
-    assert_eq!(5, *y);
+    assert_eq!(5, *y); // *y == *(y.deref())
     println!("x = {}", *y.deref());
 }
 
@@ -58,11 +57,11 @@ fn create_smart_pointer() {
     }
 
     let m = Box::new(String::from("Rust"));
-    hello(&m);
+    hello(&m); // &Box => &String => &str
 
     let m = MyBox::new(String::from("Rust"));
-    hello(&(*m.0)[..]); // in case we don't have the Deref coercion
-                        // hello(&m);
+    // hello(&(*m.0)[..]); // in case we don't have the Deref coercion
+    hello(&m); // deref coercion
 }
 
 #[cfg(feature = "skip")]
@@ -85,16 +84,22 @@ fn test_cascading_auto_deref_custom_smart_pointer() {
     let y = MyBox::new(MyBox::new(42));
 
     // method call
-    foo(&y);
+    // foo(&y); // &MyBox => &MyBox => &i32
 
     // explicit assignment
-    let derefed_x: &i32 = &y;
-    println!("deferred_x = {derefed_x}");
+    let derefed_x: &MyBox<i32> = &y;
+    println!("deferred_x = {derefed_x:?}");
 }
 
 /*
  * TODO: define `Drop` for `MyBox`
  */
+
+impl<T: Debug> Drop for MyBox<T> {
+    fn drop(&mut self) {
+        println!("Dropping MyBox with data: {:?}", self.0);
+    }
+}
 
 #[test]
 fn drop_test_for_smart_pointer() {
@@ -118,23 +123,39 @@ fn cascading_drops_for_smart_pointer() {
 /*
  * TODO: define `AsRef` for `MyBox`
  */
+impl<T: Debug> Deref for MyBox<T> {
+    type Target = T;
 
-#[cfg(feature = "skip")]
-#[test]
-fn as_ref_for_custom_smart_pointer() {
-    let mbox = MyBox::new(String::from("Rust"));
-
-    let ref_t: &str = mbox.as_ref();
-    println!("{}", ref_t);
+    fn deref(&self) -> &Self::Target {
+        println!("Deref called");
+        &self.0
+    }
 }
 
-#[cfg(feature = "skip")]
+impl<T: Debug> AsRef<T> for MyBox<T> {
+    fn as_ref(&self) -> &T {
+        // <Self as Deref>::deref(self)
+        &self.0
+    }
+}
+
+// #[cfg(feature = "skip")]
+#[test]
+fn as_ref_for_custom_smart_pointer() {
+    let mbox = MyBox::new(MyBox::new(String::from("Rust")));
+
+    let ref_t: &str = mbox.as_ref(); // How come as_ref() can be called even though it's not defined?
+    println!("{:?}", ref_t);
+}
+
+// #[cfg(feature = "skip")]
 #[test]
 fn as_ref_for_cascading_custom_smart_pointer() {
     let mbox = MyBox::new(MyBox::new(String::from("Rust")));
 
-    let into_ref = MyBox::as_ref(&mbox);
-    // let into_ref: &str = mbox.as_ref();
+    let into_ref: &MyBox<String> = mbox.as_ref();
+    println!("{:?}", into_ref);
+    let into_ref: &str = mbox.as_ref();
     println!("{:?}", into_ref);
 }
 
@@ -165,13 +186,14 @@ mod as_ref_demos {
     #[test]
     fn take_str_reference_and_string_reference_and_string1() {
         fn take_string(s: impl Into<String>) {
-            let s = s.into();
+            // fn take_string<S: Into<String>>(s: S) {
+            let s: String = s.into();
             println!("take_string called with s = {s}");
         }
 
         take_string(&String::from("Rust"));
         take_string("Rust");
-        take_string(String::from("Rust")); 
+        take_string(String::from("Rust"));
     }
 
     #[test]
